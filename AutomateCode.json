@@ -1,0 +1,211 @@
+{
+    "name": "ProcessAzureAS MSI",
+    "properties": {
+        "activities": [
+            {
+                "name": "UntilRefreshComplete",
+                "type": "Until",
+                "dependsOn": [
+                    {
+                        "activity": "FilterToCurrentRefresh",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "typeProperties": {
+                    "expression": {
+                        "value": "@not(equals(activity('GetAzureASRefreshStatus').output.status,'inProgress'))",
+                        "type": "Expression"
+                    },
+                    "activities": [
+                        {
+                            "name": "GetAzureASRefreshStatus",
+                            "type": "WebActivity",
+                            "dependsOn": [
+                                {
+                                    "activity": "Wait30Seconds",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            ],
+                            "policy": {
+                                "timeout": "7.00:00:00",
+                                "retry": 0,
+                                "retryIntervalInSeconds": 30,
+                                "secureOutput": false
+                            },
+                            "typeProperties": {
+                                "url": {
+                                    "value": "@concat('https://',pipeline().parameters.Region,'.asazure.windows.net/servers/',pipeline().parameters.Server,'/models/',pipeline().parameters.DatabaseName,'/refreshes/',activity('FilterToCurrentRefresh').output.Value[0].refreshId)",
+                                    "type": "Expression"
+                                },
+                                "method": "GET",
+                                "authentication": {
+                                    "type": "MSI",
+                                    "resource": "https://*.asazure.windows.net"
+                                }
+                            }
+                        },
+                        {
+                            "name": "Wait30Seconds",
+                            "type": "Wait",
+                            "typeProperties": {
+                                "waitTimeInSeconds": 30
+                            }
+                        }
+                    ],
+                    "timeout": "7.00:00:00"
+                }
+            },
+            {
+                "name": "StartProcessingAzureAS",
+                "type": "WebActivity",
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false
+                },
+                "typeProperties": {
+                    "url": {
+                        "value": "@concat('https://',pipeline().parameters.Region,'.asazure.windows.net/servers/',pipeline().parameters.Server,'/models/',pipeline().parameters.DatabaseName,'/refreshes')",
+                        "type": "Expression"
+                    },
+                    "method": "POST",
+                    "body": {
+                        "Type": "Full",
+                        "CommitMode": "transactional",
+                        "MaxParallelism": 10,
+                        "RetryCount": 2
+                    },
+                    "authentication": {
+                        "type": "MSI",
+                        "resource": "https://*.asazure.windows.net"
+                    }
+                }
+            },
+            {
+                "name": "IfFailed",
+                "type": "IfCondition",
+                "dependsOn": [
+                    {
+                        "activity": "UntilRefreshComplete",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "typeProperties": {
+                    "expression": {
+                        "value": "@equals(activity('GetAzureASRefreshStatus').output.status,'failed')",
+                        "type": "Expression"
+                    },
+                    "ifTrueActivities": [
+                        {
+                            "name": "ThrowErrorOnFailure",
+                            "type": "WebActivity",
+                            "policy": {
+                                "timeout": "7.00:00:00",
+                                "retry": 0,
+                                "retryIntervalInSeconds": 30,
+                                "secureOutput": false
+                            },
+                            "typeProperties": {
+                                "url": {
+                                    "value": "@string(activity('GetAzureASRefreshStatus').output)",
+                                    "type": "Expression"
+                                },
+                                "method": "GET"
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                "name": "GetAzureASRefreshes",
+                "type": "WebActivity",
+                "dependsOn": [
+                    {
+                        "activity": "StartProcessingAzureAS",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false
+                },
+                "typeProperties": {
+                    "url": {
+                        "value": "@concat('https://',pipeline().parameters.Region,'.asazure.windows.net/servers/',pipeline().parameters.Server,'/models/',pipeline().parameters.DatabaseName,'/refreshes')",
+                        "type": "Expression"
+                    },
+                    "method": "GET",
+                    "body": {
+                        "Type": "Full",
+                        "CommitMode": "transactional",
+                        "MaxParallelism": 10,
+                        "RetryCount": 2
+                    },
+                    "authentication": {
+                        "type": "MSI",
+                        "resource": "https://*.asazure.windows.net"
+                    }
+                }
+            },
+            {
+                "name": "FilterToCurrentRefresh",
+                "type": "Filter",
+                "dependsOn": [
+                    {
+                        "activity": "GetAzureASRefreshes",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "typeProperties": {
+                    "items": {
+                        "value": "@json(activity('GetAzureASRefreshes').output.Response)",
+                        "type": "Expression"
+                    },
+                    "condition": {
+                        "value": "@greaterOrEquals(item().startTime,addseconds(activity('StartProcessingAzureAS').output.startTime,-30))",
+                        "type": "Expression"
+                    }
+                }
+            }
+        ],
+        "parameters": {
+            "TenantID": {
+                "type": "String",
+                "defaultValue": ""
+            },
+            "SubscriptionID": {
+                "type": "String",
+                "defaultValue": ""
+            },
+            "Region": {
+                "type": "String",
+                "defaultValue": ""
+            },
+            "Server": {
+                "type": "String",
+                "defaultValue": ""
+            },
+            "DatabaseName": {
+                "type": "String",
+                "defaultValue": ""
+            }
+        },
+        "folder": {
+            "name": "Azure AS"
+        }
+    },
+    "type": "Microsoft.DataFactory/factories/pipelines"
+}
