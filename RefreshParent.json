@@ -1,0 +1,95 @@
+{
+    "name": "AAS_Refresh_Parent",
+    "properties": {
+        "activities": [
+            {
+                "name": "ForEach1",
+                "type": "ForEach",
+                "dependsOn": [],
+                "userProperties": [],
+                "typeProperties": {
+                    "items": {
+                        "value": "@pipeline().parameters.Partitions",
+                        "type": "Expression"
+                    },
+                    "isSequential": true,
+                    "activities": [
+                        {
+                            "name": "Execute Pipeline1",
+                            "type": "ExecutePipeline",
+                            "dependsOn": [],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "pipeline": {
+                                    "referenceName": "AAS_Refresh_Test",
+                                    "type": "PipelineReference"
+                                },
+                                "waitOnCompletion": true,
+                                "parameters": {
+                                    "TenantID": {
+                                        "value": "@item().tenantid",
+                                        "type": "Expression"
+                                    },
+                                    "SubscriptionID": {
+                                        "value": "@item().subscriptionid",
+                                        "type": "Expression"
+                                    },
+                                    "Region": {
+                                        "value": "@item().region",
+                                        "type": "Expression"
+                                    },
+                                    "Server": {
+                                        "value": "@item().server",
+                                        "type": "Expression"
+                                    },
+                                    "DatabaseName": {
+                                        "value": "@item().databasename",
+                                        "type": "Expression"
+                                    },
+                                    "Table": {
+                                        "value": "@item().table",
+                                        "type": "Expression"
+                                    },
+                                    "Partition": {
+                                        "value": "@item().partition",
+                                        "type": "Expression"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        ],
+        "concurrency": 1,
+        "parameters": {
+            "Partitions": {
+                "type": "array",
+                "defaultValue": [
+                    {
+                        "tenantid": "",
+                        "subscriptionid": "",
+                        "region": "",
+                        "server": "",
+                        "databasename": "",
+                        "table": "",
+                        "partition": ""
+                    },
+                    {
+                        "tenantid": "",
+                        "subscriptionid": "",
+                        "region": "",
+                        "server": "",
+                        "databasename": "",
+                        "table": "",
+                        "partition": ""
+                    }
+                ]
+            }
+        },
+        "folder": {
+            "name": "Azure AS"
+        },
+        "annotations": []
+    }
+}
